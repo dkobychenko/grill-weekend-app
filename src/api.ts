@@ -1,5 +1,5 @@
 import { demoRecipes } from "./demo";
-import type { ChoiceHistory, Recipe, RecipeFilters, RecipePage } from "./types";
+import type { ChoiceHistory, FilterMetadata, Recipe, RecipeFilters, RecipePage } from "./types";
 
 const API_URL = (import.meta.env.VITE_MINI_APP_API_URL ?? "").replace(/\/$/, "");
 
@@ -69,13 +69,25 @@ export async function getRecipe(id: string): Promise<Recipe> {
 
 export async function getRandomRecipe(filters: RecipeFilters): Promise<Recipe> {
   if (isDemoMode()) {
-    const matches = demoPage(filters, 0, demoRecipes.length).items;
+    const matches = demoPage(filters, 0, demoRecipes.length).items.filter((recipe) => recipe.category !== "Соусы и маринады");
     if (!matches.length) throw new Error("Нет рецептов с такими условиями");
     return matches[Math.floor(Math.random() * matches.length)];
   }
   const query = filtersQuery(filters);
   const response = await fetch(`${API_URL}/recipes/random?${query}`, { headers: requestHeaders() });
   return await responseJson<Recipe>(response, "Не удалось подобрать случайный рецепт");
+}
+
+export async function getFilterMetadata(): Promise<FilterMetadata> {
+  if (isDemoMode()) {
+    const countValues = (values: string[]) => [...new Set(values)].map((value) => ({ value, count: values.filter((item) => item === value).length }));
+    return {
+      categories: countValues(demoRecipes.map((recipe) => recipe.category)),
+      grills: countValues(demoRecipes.flatMap((recipe) => recipe.grill_types)),
+    };
+  }
+  const response = await fetch(`${API_URL}/filters`, { headers: requestHeaders() });
+  return await responseJson<FilterMetadata>(response, "Не удалось загрузить фильтры");
 }
 
 export async function saveRecipeChoice(recipeId: string, guests: number): Promise<void> {

@@ -1,9 +1,9 @@
 import { useDeferredValue, useEffect, useState } from "react";
-import { getChoiceHistory, getRandomRecipe, getRecipe, getRecipes, isDemoMode, saveRecipeChoice } from "./api";
-import type { ChoiceHistoryItem, Ingredient, Recipe, RecipeFilters } from "./types";
+import { getChoiceHistory, getFilterMetadata, getRandomRecipe, getRecipe, getRecipes, isDemoMode, saveRecipeChoice } from "./api";
+import type { ChoiceHistoryItem, FilterOption, Ingredient, Recipe, RecipeFilters } from "./types";
 
-const categories = ["", "Говядина", "Свинина", "Птица", "Баранина", "Рыба и морепродукты", "Овощи и гарниры"];
-const grills = ["", "дом", "угольный", "газовый", "мангал", "камадо"];
+const fallbackCategories: FilterOption[] = ["Говядина", "Свинина", "Птица", "Баранина", "Рыба и морепродукты", "Овощи и гарниры"].map((value) => ({ value, count: 0 }));
+const fallbackGrills: FilterOption[] = ["дом", "угольный", "газовый", "мангал", "камадо"].map((value) => ({ value, count: 0 }));
 const difficultyLabels = { easy: "Легко", medium: "Средне", hard: "Сложно" };
 const categoryMarks: Record<string, string> = {
   "Говядина": "ГВ",
@@ -236,6 +236,8 @@ export default function App() {
   const [history, setHistory] = useState<ChoiceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState(fallbackCategories);
+  const [grillOptions, setGrillOptions] = useState(fallbackGrills);
   const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
 
   useEffect(() => {
@@ -252,6 +254,16 @@ export default function App() {
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [deferredQuery, filters.category, filters.grill]);
+
+  useEffect(() => {
+    let active = true;
+    getFilterMetadata().then((metadata) => {
+      if (!active) return;
+      setCategoryOptions(metadata.categories);
+      setGrillOptions(metadata.grills);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   async function loadMore() {
     setLoading(true);
@@ -321,6 +333,8 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  const allRecipeCount = categoryOptions.reduce((sum, option) => sum + option.count, 0) || total;
+
   if (selected) return <RecipeView recipe={selected} guests={guests} onGuestsChange={setGuests} onChoose={chooseRecipe} onBack={() => setSelected(null)} />;
   if (showHistory) return <HistoryView items={history} loading={historyLoading} error={historyError} onOpen={openHistoryRecipe} onBack={() => setShowHistory(false)} />;
 
@@ -361,9 +375,9 @@ export default function App() {
         <div className="filter-group">
           <p>Что готовим</p>
           <div className="chips">
-            {categories.map((category) => (
-              <button className={filters.category === category ? "active" : ""} onClick={() => setFilters({ ...filters, category })} key={category || "all"}>
-                {category || "Все"}
+            {[{ value: "", count: allRecipeCount }, ...categoryOptions].map((category) => (
+              <button className={filters.category === category.value ? "active" : ""} onClick={() => setFilters({ ...filters, category: category.value })} key={category.value || "all"}>
+                {category.value || "Все"}{category.count > 0 && <small>{category.count}</small>}
               </button>
             ))}
           </div>
@@ -371,9 +385,9 @@ export default function App() {
         <div className="filter-group">
           <p>Где готовим</p>
           <div className="chips compact">
-            {grills.map((grill) => (
-              <button className={filters.grill === grill ? "active" : ""} onClick={() => setFilters({ ...filters, grill })} key={grill || "any"}>
-                {grill || "Неважно"}
+            {[{ value: "", count: allRecipeCount }, ...grillOptions].map((grill) => (
+              <button className={filters.grill === grill.value ? "active" : ""} onClick={() => setFilters({ ...filters, grill: grill.value })} key={grill.value || "any"}>
+                {grill.value || "Неважно"}{grill.count > 0 && <small>{grill.count}</small>}
               </button>
             ))}
           </div>

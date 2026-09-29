@@ -60,3 +60,13 @@ export type ChoiceHistory = {
   items: ChoiceHistoryItem[];
   total: number;
 };
+
+export type FilterOption = {
+  value: string;
+  count: number;
+};
+
+export type FilterMetadata = {
+  categories: FilterOption[];
+  grills: FilterOption[];
+};
