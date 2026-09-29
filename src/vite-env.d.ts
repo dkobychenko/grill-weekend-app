@@ -13,6 +13,9 @@ interface TelegramWebApp {
     onClick(callback: () => void): void;
     offClick(callback: () => void): void;
   };
+  HapticFeedback?: {
+    impactOccurred(style: "light" | "medium" | "heavy" | "rigid" | "soft"): void;
+  };
 }
 
 interface Window {

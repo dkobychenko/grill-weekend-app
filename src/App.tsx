@@ -158,6 +158,7 @@ export default function App() {
   }
 
   async function openRecipe(id: string) {
+    setError("");
     setDetailLoading(true);
     try {
       setSelected(await getRecipe(id));
@@ -170,7 +171,8 @@ export default function App() {
   }
 
   function randomRecipe() {
-    if (!recipes.length) return;
+    if (!recipes.length || detailLoading) return;
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
     void openRecipe(recipes[Math.floor(Math.random() * recipes.length)].id);
   }
 
@@ -178,6 +180,15 @@ export default function App() {
 
   return (
     <main>
+      {detailLoading && (
+        <div className="detail-loading" role="status" aria-live="polite">
+          <div className="detail-loading-card">
+            <div className="loader compact" aria-hidden="true"><span /><span /><span /></div>
+            <strong>Подбираю рецепт…</strong>
+            <small>Обычно это занимает пару секунд</small>
+          </div>
+        </div>
+      )}
       <header className="topbar">
         <div className="brand"><span>ОГ</span><div><strong>Что на огонь?</strong><small>рецепты без суеты</small></div></div>
         <div className="profile">{firstName?.[0] ?? "Г"}</div>
@@ -189,10 +200,12 @@ export default function App() {
           <h1>Найдём блюдо,<br /><em>которое хочется готовить</em></h1>
           <p>От домашней духовки до угольного гриля. Фильтруйте, выбирайте или доверьтесь случаю.</p>
         </div>
-        <button className="random-button" onClick={randomRecipe} disabled={!recipes.length || detailLoading}>
-          <span>↻</span><strong>Мне повезёт</strong><small>случайный рецепт</small>
+        <button className="random-button" onClick={randomRecipe} disabled={!recipes.length || detailLoading} aria-busy={detailLoading}>
+          <span>↻</span><strong>{detailLoading ? "Подбираю…" : "Мне повезёт"}</strong><small>случайный рецепт</small>
         </button>
       </section>
+
+      {error && <div className="status-toast error-note" role="alert">{error}</div>}
 
       <section className="controls">
         <label className="search-field">
@@ -227,7 +240,6 @@ export default function App() {
           <span>{total}</span>
         </div>
         {isDemoMode() && <div className="demo-note">Демонстрационный режим · после публикации здесь появятся рецепты из Supabase</div>}
-        {error && <div className="error-note">{error}</div>}
         <div className="recipe-grid">
           {recipes.map((recipe) => <RecipeCard recipe={recipe} onOpen={openRecipe} key={recipe.id} />)}
         </div>

@@ -92,6 +92,7 @@ body::before {
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 .random-button:hover { transform: translate(4px, 4px); box-shadow: 8px 8px 0 var(--ink); }
+.random-button:disabled { cursor: wait; opacity: 0.82; }
 .random-button > span { grid-row: 1 / 3; font-family: Georgia, serif; font-size: 42px; line-height: 0.8; }
 .random-button strong { font-size: 17px; }
 .random-button small { opacity: 0.72; }
@@ -132,6 +133,11 @@ body::before {
 .catalog-heading > span { font-family: Georgia, serif; font-size: 42px; color: var(--moss); }
 .demo-note, .error-note { margin: 0 0 22px; padding: 11px 14px; border-left: 4px solid var(--moss); background: rgba(83, 100, 61, 0.1); font-size: 13px; }
 .error-note { border-color: var(--ember); background: rgba(217, 80, 46, 0.1); }
+.status-toast { position: sticky; z-index: 20; top: 10px; max-width: 1180px; margin: 0 auto 18px; box-shadow: 0 8px 24px rgba(32, 32, 25, 0.14); }
+.detail-loading { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(32, 32, 25, 0.46); backdrop-filter: blur(3px); }
+.detail-loading-card { display: grid; justify-items: center; width: min(330px, 100%); padding: 28px 24px; border-radius: 3px 24px 3px 3px; background: var(--cream); box-shadow: 10px 10px 0 var(--ink); text-align: center; }
+.detail-loading-card strong { font-family: Georgia, serif; font-size: 25px; }
+.detail-loading-card small { margin-top: 6px; color: rgba(32, 32, 25, 0.62); }
 .recipe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .recipe-card {
   display: block;
@@ -159,6 +165,7 @@ body::before {
 .loader { display: flex; justify-content: center; gap: 7px; padding: 42px; }
 .loader span { width: 9px; height: 9px; border-radius: 50%; background: var(--ember); animation: pulse 800ms infinite alternate; }
 .loader span:nth-child(2) { animation-delay: 180ms; }.loader span:nth-child(3) { animation-delay: 360ms; }
+.loader.compact { padding: 0 0 18px; }
 .load-more { display: block; margin: 30px auto 0; padding: 13px 22px; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
 .empty-state { padding: 60px 20px; text-align: center; }.empty-state strong { font-family: Georgia, serif; font-size: 30px; }.empty-state p { color: rgba(32,32,25,.6); }
 
@@ -190,6 +197,7 @@ footer { display: flex; justify-content: space-between; max-width: 1180px; margi
   .hero { grid-template-columns: 1fr; padding: 40px 16px 38px; }
   .hero h1 { font-size: clamp(42px, 13.4vw, 62px); }
   .random-button { width: calc(100% - 8px); }
+  .status-toast { margin-inline: 16px; }
   .controls, .catalog, .recipe-page { padding-inline: 16px; }
   .controls { grid-template-columns: 1fr; gap: 24px; }
   .search-field { grid-row: auto; }
