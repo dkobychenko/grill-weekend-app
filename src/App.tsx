@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useState } from "react";
-import { getRecipe, getRecipes, isDemoMode } from "./api";
+import { getRandomRecipe, getRecipe, getRecipes, isDemoMode } from "./api";
 import type { Ingredient, Recipe, RecipeFilters } from "./types";
 
 const categories = ["", "Говядина", "Свинина", "Птица", "Баранина", "Рыба и морепродукты", "Овощи и гарниры"];
@@ -25,10 +25,48 @@ function portions(recipe: Recipe): string {
     : `${recipe.servings_min} порции`;
 }
 
-function quantityText(ingredient: Ingredient): string {
+function normalized(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase("ru");
+}
+
+function scaledQuantity(value: number, unit: string | null | undefined, factor: number): number {
+  let result = value * factor;
+  const normalizedUnit = normalized(unit);
+  if (/^(шт\.?|зубчик|веточк|ломтик|кус|стеб|лист|бан|упаков|кочан|луковиц)/.test(normalizedUnit)) {
+    result = Math.ceil(result - 1e-9);
+  } else if (/^(г|грам|мл|миллилитр)/.test(normalizedUnit)) {
+    result = Math.round(result);
+  } else if (/^(ч\.? ?л\.?|ст\.? ?л\.?|чай|столов)/.test(normalizedUnit)) {
+    result = Math.round(result * 4) / 4;
+  } else if (/^(кг|л|литр)/.test(normalizedUnit)) {
+    result = Math.round(result * 100) / 100;
+  } else {
+    result = Math.round(result * 10) / 10;
+  }
+  return result;
+}
+
+function quantityText(ingredient: Ingredient, factor = 1): string {
   if (ingredient.quantity == null) return ingredient.note ?? "по вкусу";
-  const value = Number.isInteger(ingredient.quantity) ? ingredient.quantity : String(ingredient.quantity).replace(".", ",");
+  const scaled = scaledQuantity(ingredient.quantity, ingredient.unit, factor);
+  const value = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(scaled);
   return [value, ingredient.unit, ingredient.note].filter(Boolean).join(" ");
+}
+
+function recipeBaseServings(recipe: Recipe): number | null {
+  const value = Number(recipe.servings_max ?? recipe.servings_min ?? 0);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function GuestPicker({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const update = (next: number) => onChange(Math.max(1, Math.min(30, Math.trunc(next || 1))));
+  return (
+    <div className="guest-picker" aria-label="Количество человек">
+      <button onClick={() => update(value - 1)} disabled={value <= 1} aria-label="Уменьшить количество">−</button>
+      <label><input type="number" min="1" max="30" value={value} onChange={(event) => update(Number(event.target.value))} /><span>человек</span></label>
+      <button onClick={() => update(value + 1)} disabled={value >= 30} aria-label="Увеличить количество">+</button>
+    </div>
+  );
 }
 
 function RecipeCard({ recipe, onOpen }: { recipe: Recipe; onOpen: (id: string) => void }) {
@@ -51,7 +89,7 @@ function RecipeCard({ recipe, onOpen }: { recipe: Recipe; onOpen: (id: string) =
   );
 }
 
-function RecipeView({ recipe, onBack }: { recipe: Recipe; onBack: () => void }) {
+function RecipeView({ recipe, guests, onGuestsChange, onBack }: { recipe: Recipe; guests: number; onGuestsChange: (value: number) => void; onBack: () => void }) {
   useEffect(() => {
     const telegram = window.Telegram?.WebApp;
     const backButton = telegram?.initData ? telegram.BackButton : undefined;
@@ -68,6 +106,8 @@ function RecipeView({ recipe, onBack }: { recipe: Recipe; onBack: () => void }) 
       ? `${recipe.target_internal_temp_min_c}–${recipe.target_internal_temp_max_c} °C`
       : `${recipe.target_internal_temp_min_c} °C`
     : null;
+  const baseServings = recipeBaseServings(recipe);
+  const factor = baseServings ? guests / baseServings : 1;
 
   return (
     <main className="recipe-page">
@@ -79,10 +119,19 @@ function RecipeView({ recipe, onBack }: { recipe: Recipe; onBack: () => void }) 
         <p>{recipe.summary}</p>
         <div className="detail-facts">
           <div><strong>{totalMinutes(recipe)}</strong><span>минут</span></div>
-          <div><strong>{recipe.servings_max ?? recipe.servings_min ?? "—"}</strong><span>порций</span></div>
+          <div><strong>{guests}</strong><span>человек</span></div>
           <div><strong>{recipe.difficulty ? difficultyLabels[recipe.difficulty] : "—"}</strong><span>сложность</span></div>
         </div>
       </div>
+
+      <section className="servings-panel">
+        <div><span>Готовим на</span><GuestPicker value={guests} onChange={onGuestsChange} /></div>
+        <p>{baseServings
+          ? factor === 1
+            ? `Ингредиенты указаны на ${baseServings} человек.`
+            : `Ингредиенты пересчитаны с ${baseServings} на ${guests} человек · ×${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(factor)}`
+          : "В рецепте не указано исходное количество порций, поэтому количества оставлены без изменения."}</p>
+      </section>
 
       <section className="detail-section">
         <div className="section-heading"><span>01</span><h2>Ингредиенты</h2></div>
@@ -90,7 +139,7 @@ function RecipeView({ recipe, onBack }: { recipe: Recipe; onBack: () => void }) 
           {(recipe.ingredients ?? []).map((ingredient, index) => (
             <div className="ingredient-row" key={`${ingredient.name}-${index}`}>
               <span>{ingredient.name}{ingredient.is_optional ? " (по желанию)" : ""}</span>
-              <strong>{quantityText(ingredient)}</strong>
+              <strong>{quantityText(ingredient, factor)}</strong>
             </div>
           ))}
         </div>
@@ -127,6 +176,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<Recipe | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [guests, setGuests] = useState(4);
   const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
 
   useEffect(() => {
@@ -170,13 +220,22 @@ export default function App() {
     }
   }
 
-  function randomRecipe() {
-    if (!recipes.length || detailLoading) return;
+  async function randomRecipe() {
+    if (detailLoading) return;
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
-    void openRecipe(recipes[Math.floor(Math.random() * recipes.length)].id);
+    setError("");
+    setDetailLoading(true);
+    try {
+      setSelected(await getRandomRecipe({ ...filters, query: deferredQuery }));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось подобрать случайный рецепт");
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
-  if (selected) return <RecipeView recipe={selected} onBack={() => setSelected(null)} />;
+  if (selected) return <RecipeView recipe={selected} guests={guests} onGuestsChange={setGuests} onBack={() => setSelected(null)} />;
 
   return (
     <main>
@@ -200,7 +259,7 @@ export default function App() {
           <h1>Найдём блюдо,<br /><em>которое хочется готовить</em></h1>
           <p>От домашней духовки до угольного гриля. Фильтруйте, выбирайте или доверьтесь случаю.</p>
         </div>
-        <button className="random-button" onClick={randomRecipe} disabled={!recipes.length || detailLoading} aria-busy={detailLoading}>
+        <button className="random-button" onClick={randomRecipe} disabled={detailLoading} aria-busy={detailLoading}>
           <span>↻</span><strong>{detailLoading ? "Подбираю…" : "Мне повезёт"}</strong><small>случайный рецепт</small>
         </button>
       </section>
@@ -231,6 +290,10 @@ export default function App() {
               </button>
             ))}
           </div>
+        </div>
+        <div className="filter-group guest-filter">
+          <p>На сколько человек</p>
+          <GuestPicker value={guests} onChange={setGuests} />
         </div>
       </section>
 

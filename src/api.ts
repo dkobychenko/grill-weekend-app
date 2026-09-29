@@ -27,19 +27,34 @@ function demoPage(filters: RecipeFilters, offset: number, limit: number): Recipe
   return { items: matches.slice(offset, offset + limit), total: matches.length, offset, limit };
 }
 
+function filtersQuery(filters: RecipeFilters): URLSearchParams {
+  const query = new URLSearchParams();
+  if (filters.query.trim()) query.set("q", filters.query.trim());
+  if (filters.category) query.set("category", filters.category);
+  if (filters.grill) query.set("grill", filters.grill);
+  return query;
+}
+
+async function responseJson<T>(response: Response, fallback: string): Promise<T> {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof body?.error === "string" ? body.error : fallback;
+    throw new Error(message);
+  }
+  return body as T;
+}
+
 export function isDemoMode(): boolean {
   return !API_URL || !telegramInitData();
 }
 
 export async function getRecipes(filters: RecipeFilters, offset = 0, limit = 12): Promise<RecipePage> {
   if (isDemoMode()) return demoPage(filters, offset, limit);
-  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (filters.query.trim()) query.set("q", filters.query.trim());
-  if (filters.category) query.set("category", filters.category);
-  if (filters.grill) query.set("grill", filters.grill);
+  const query = filtersQuery(filters);
+  query.set("limit", String(limit));
+  query.set("offset", String(offset));
   const response = await fetch(`${API_URL}/recipes?${query}`, { headers: requestHeaders() });
-  if (!response.ok) throw new Error(`Каталог временно недоступен (${response.status})`);
-  return await response.json();
+  return await responseJson<RecipePage>(response, `Каталог временно недоступен (${response.status})`);
 }
 
 export async function getRecipe(id: string): Promise<Recipe> {
@@ -49,6 +64,16 @@ export async function getRecipe(id: string): Promise<Recipe> {
     return demo;
   }
   const response = await fetch(`${API_URL}/recipes/${encodeURIComponent(id)}`, { headers: requestHeaders() });
-  if (!response.ok) throw new Error(response.status === 404 ? "Рецепт не найден" : "Не удалось загрузить рецепт");
-  return await response.json();
+  return await responseJson<Recipe>(response, response.status === 404 ? "Рецепт не найден" : "Не удалось загрузить рецепт");
+}
+
+export async function getRandomRecipe(filters: RecipeFilters): Promise<Recipe> {
+  if (isDemoMode()) {
+    const matches = demoPage(filters, 0, demoRecipes.length).items;
+    if (!matches.length) throw new Error("Нет рецептов с такими условиями");
+    return matches[Math.floor(Math.random() * matches.length)];
+  }
+  const query = filtersQuery(filters);
+  const response = await fetch(`${API_URL}/recipes/random?${query}`, { headers: requestHeaders() });
+  return await responseJson<Recipe>(response, "Не удалось подобрать случайный рецепт");
 }
