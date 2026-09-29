@@ -13,7 +13,7 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--paper); }
+body { margin: 0; min-width: 320px; min-height: 100vh; overflow-x: hidden; background: var(--paper); }
 button, input { font: inherit; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible { outline: 3px solid rgba(217, 80, 46, 0.35); outline-offset: 2px; }
@@ -101,7 +101,7 @@ body::before {
 .random-button small { opacity: 0.72; }
 
 .controls, .catalog, .recipe-page { max-width: 1180px; margin: 0 auto; padding: 38px 24px; }
-.controls { display: grid; grid-template-columns: 1.1fr 2fr; gap: 28px 42px; }
+.controls { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr); gap: 28px 42px; }
 .search-field {
   display: flex;
   grid-row: 1 / 4;
@@ -116,8 +116,9 @@ body::before {
 }
 .search-field span { font-family: Georgia, serif; font-size: 28px; }
 .search-field input { width: 100%; border: 0; outline: 0; background: transparent; font-size: 17px; }
+.filter-group { min-width: 0; max-width: 100%; }
 .filter-group > p { margin: 0 0 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-.chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 0 4px; scrollbar-width: none; }
+.chips { display: flex; width: 100%; max-width: 100%; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; padding: 0 0 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .chips::-webkit-scrollbar { display: none; }
 .chips button {
   flex: 0 0 auto;
@@ -215,7 +216,7 @@ footer { display: flex; justify-content: space-between; max-width: 1180px; margi
 @keyframes reveal { from { opacity: 0; transform: translateY(14px); } }
 @keyframes pulse { to { opacity: .25; transform: scale(.7); } }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .topbar { padding-inline: 16px; }
   .history-button span { display: none; }
   .hero { grid-template-columns: 1fr; padding: 40px 16px 38px; }
