@@ -1,5 +1,5 @@
 import { demoRecipes } from "./demo";
-import type { ChoiceHistory, FilterMetadata, Recipe, RecipeFilters, RecipePage } from "./types";
+import type { ChoiceHistory, FilterMetadata, Recipe, RecipeFilters, RecipePage, UserStats } from "./types";
 
 const API_URL = (import.meta.env.VITE_MINI_APP_API_URL ?? "").replace(/\/$/, "");
 
@@ -96,7 +96,7 @@ export async function saveRecipeChoice(recipeId: string, guests: number): Promis
     const recipe = demoRecipes.find((item) => item.id === recipeId);
     if (!recipe) throw new Error("Рецепт не найден");
     const withoutRecipe = current.filter((item) => item.recipe_id !== recipeId);
-    withoutRecipe.unshift({ id: crypto.randomUUID(), recipe_id: recipeId, guests, chosen_at: new Date().toISOString() });
+    withoutRecipe.unshift({ id: crypto.randomUUID(), recipe_id: recipeId, guests, chosen_at: new Date().toISOString(), status: "planned" });
     localStorage.setItem("demo-recipe-choices", JSON.stringify(withoutRecipe.slice(0, 50)));
     return;
   }
@@ -108,6 +108,23 @@ export async function saveRecipeChoice(recipeId: string, guests: number): Promis
   await responseJson(response, "Не удалось сохранить выбор");
 }
 
+export async function markRecipeCooked(recipeId: string, guests: number): Promise<void> {
+  if (isDemoMode()) {
+    const current = JSON.parse(localStorage.getItem("demo-recipe-choices") ?? "[]") as Array<Record<string, unknown>>;
+    const updated = current.map((choice) => choice.recipe_id === recipeId
+      ? { ...choice, guests, status: "cooked", status_at: new Date().toISOString() }
+      : choice);
+    localStorage.setItem("demo-recipe-choices", JSON.stringify(updated));
+    return;
+  }
+  const response = await fetch(`${API_URL}/choices/${encodeURIComponent(recipeId)}/cooked`, {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({ guests }),
+  });
+  await responseJson(response, "Не удалось отметить рецепт приготовленным");
+}
+
 export async function getChoiceHistory(): Promise<ChoiceHistory> {
   if (isDemoMode()) {
     const current = JSON.parse(localStorage.getItem("demo-recipe-choices") ?? "[]") as Array<Record<string, unknown>>;
@@ -116,6 +133,8 @@ export async function getChoiceHistory(): Promise<ChoiceHistory> {
       return recipe ? [{
         id: String(choice.id),
         chosen_at: String(choice.chosen_at),
+        status_at: String(choice.status_at ?? choice.chosen_at),
+        status: choice.status === "cooked" ? "cooked" as const : "planned" as const,
         guests: Number(choice.guests) || null,
         recipe,
       }] : [];
@@ -124,4 +143,23 @@ export async function getChoiceHistory(): Promise<ChoiceHistory> {
   }
   const response = await fetch(`${API_URL}/choices?limit=30`, { headers: requestHeaders() });
   return await responseJson<ChoiceHistory>(response, "Не удалось загрузить историю");
+}
+
+export async function getUserStats(): Promise<UserStats> {
+  if (isDemoMode()) {
+    const history = await getChoiceHistory();
+    const cooked = history.items.filter((item) => item.status === "cooked");
+    const count = (values: string[]) => [...new Set(values)].map((value) => ({ value, count: values.filter((item) => item === value).length })).sort((a, b) => b.count - a.count).slice(0, 5);
+    return {
+      planned: history.items.filter((item) => item.status === "planned").length,
+      total_chosen: history.total,
+      total_cooked: cooked.length,
+      distinct_cooked: cooked.length,
+      top_categories: count(cooked.map((item) => item.recipe.category)),
+      top_grills: count(cooked.flatMap((item) => item.recipe.grill_types)),
+      top_equipment: count(cooked.flatMap((item) => item.recipe.equipment ?? [])),
+    };
+  }
+  const response = await fetch(`${API_URL}/stats`, { headers: requestHeaders() });
+  return await responseJson<UserStats>(response, "Не удалось загрузить статистику");
 }

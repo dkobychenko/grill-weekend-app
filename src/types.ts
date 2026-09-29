@@ -52,6 +52,8 @@ export type RecipeFilters = {
 export type ChoiceHistoryItem = {
   id: string;
   chosen_at: string;
+  status_at: string;
+  status: "planned" | "cooked";
   guests: number | null;
   recipe: Recipe;
 };
@@ -69,4 +71,14 @@ export type FilterOption = {
 export type FilterMetadata = {
   categories: FilterOption[];
   grills: FilterOption[];
+};
+
+export type UserStats = {
+  planned: number;
+  total_chosen: number;
+  total_cooked: number;
+  distinct_cooked: number;
+  top_categories: FilterOption[];
+  top_grills: FilterOption[];
+  top_equipment: FilterOption[];
 };

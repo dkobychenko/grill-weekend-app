@@ -211,6 +211,10 @@ body::before {
 .history-page { max-width: 1180px; min-height: 100vh; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 24px 60px; }
 .history-heading { max-width: 760px; padding: 34px 0 44px; }.history-heading h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(52px, 9vw, 94px); font-weight: 400; letter-spacing: -.06em; }.history-heading > p:last-child { max-width: 580px; color: rgba(32,32,25,.65); font-size: 17px; line-height: 1.5; }
 .history-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 18px; }.history-item { min-width: 0; }.history-meta { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 9px; color: rgba(32,32,25,.62); font-size: 12px; }.history-meta strong { color: var(--ember); }.history-empty { border: 1px solid var(--line); background: var(--cream); }
+.history-meta strong.cooked { color: var(--moss); }.history-meta strong.planned { color: var(--ember); }
+.stats-panel { display: grid; grid-template-columns: repeat(3, minmax(110px, .7fr)) minmax(210px, 1.5fr); gap: 1px; margin: 0 0 38px; border: 1px solid var(--line); background: var(--line); }
+.stats-panel > div { display: grid; align-content: center; min-height: 112px; padding: 18px; background: var(--cream); }.stats-panel > div > strong { font-family: Georgia, serif; font-size: 35px; font-weight: 400; }.stats-panel > div > span { color: rgba(32,32,25,.55); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.stats-panel .taste-summary { background: var(--moss); color: var(--paper); }.stats-panel .taste-summary > span { color: rgba(244,234,215,.64); }.stats-panel .taste-summary > strong { margin-top: 5px; font-size: 22px; }.stats-panel .taste-summary > small { margin-top: 5px; color: rgba(244,234,215,.7); }
 footer { display: flex; justify-content: space-between; max-width: 1180px; margin: 40px auto 0; padding: 28px 24px max(34px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: rgba(32,32,25,.55); } footer span { color: var(--ink); font-family: Georgia, serif; } footer p { margin: 0; }
 
 @keyframes reveal { from { opacity: 0; transform: translateY(14px); } }
@@ -243,6 +247,7 @@ footer { display: flex; justify-content: space-between; max-width: 1180px; margi
   .ingredient-list { grid-template-columns: 1fr; }
   .safety-panel { grid-template-columns: 1fr; }
   .history-page { padding-inline: 16px; }.history-grid { grid-template-columns: 1fr; }
+  .stats-panel { grid-template-columns: repeat(3, 1fr); }.stats-panel .taste-summary { grid-column: 1 / -1; min-height: 96px; }
   footer { display: grid; gap: 8px; }
 }
 

@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useState } from "react";
-import { getChoiceHistory, getFilterMetadata, getRandomRecipe, getRecipe, getRecipes, isDemoMode, saveRecipeChoice } from "./api";
-import type { ChoiceHistoryItem, FilterOption, Ingredient, Recipe, RecipeFilters } from "./types";
+import { getChoiceHistory, getFilterMetadata, getRandomRecipe, getRecipe, getRecipes, getUserStats, isDemoMode, markRecipeCooked, saveRecipeChoice } from "./api";
+import type { ChoiceHistoryItem, FilterOption, Ingredient, Recipe, RecipeFilters, UserStats } from "./types";
 
 const fallbackCategories: FilterOption[] = ["Говядина", "Свинина", "Птица", "Баранина", "Рыба и морепродукты", "Овощи и гарниры"].map((value) => ({ value, count: 0 }));
 const fallbackGrills: FilterOption[] = ["дом", "угольный", "газовый", "мангал", "камадо"].map((value) => ({ value, count: 0 }));
@@ -89,8 +89,8 @@ function RecipeCard({ recipe, onOpen }: { recipe: Recipe; onOpen: (id: string) =
   );
 }
 
-function RecipeView({ recipe, guests, onGuestsChange, onChoose, onBack }: { recipe: Recipe; guests: number; onGuestsChange: (value: number) => void; onChoose: () => Promise<void>; onBack: () => void }) {
-  const [choiceState, setChoiceState] = useState<"idle" | "saving" | "saved">("idle");
+function RecipeView({ recipe, guests, choiceStatus, onGuestsChange, onChoose, onCooked, onBack }: { recipe: Recipe; guests: number; choiceStatus: ChoiceHistoryItem["status"] | null; onGuestsChange: (value: number) => void; onChoose: () => Promise<void>; onCooked: () => Promise<void>; onBack: () => void }) {
+  const [choiceState, setChoiceState] = useState<"idle" | "saving" | "saved" | "cooking" | "cooked">(choiceStatus === "cooked" ? "cooked" : choiceStatus === "planned" ? "saved" : "idle");
   const [choiceError, setChoiceError] = useState("");
 
   useEffect(() => {
@@ -127,6 +127,24 @@ function RecipeView({ recipe, guests, onGuestsChange, onChoose, onBack }: { reci
     }
   }
 
+  async function markCooked() {
+    if (choiceState !== "saved") return;
+    setChoiceError("");
+    setChoiceState("cooking");
+    try {
+      await onCooked();
+      setChoiceState("cooked");
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("medium");
+    } catch (reason) {
+      setChoiceState("saved");
+      setChoiceError(reason instanceof Error ? reason.message : "Не удалось обновить статус");
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("heavy");
+    }
+  }
+
+  const isPlanned = choiceState === "saved" || choiceState === "cooking";
+  const choiceTitle = choiceState === "cooked" ? "Уже приготовлено" : isPlanned ? "Запланировано" : `На ${guests} человек`;
+
   return (
     <main className="recipe-page">
       <button className="back-button" onClick={onBack}>← К каталогу</button>
@@ -152,9 +170,9 @@ function RecipeView({ recipe, guests, onGuestsChange, onChoose, onBack }: { reci
       </section>
 
       <section className="choice-panel">
-        <div><span>План на готовку</span><strong>{choiceState === "saved" ? "Рецепт сохранён" : `На ${guests} человек`}</strong></div>
-        <button onClick={chooseRecipe} disabled={choiceState !== "idle"}>
-          {choiceState === "saving" ? "Сохраняю…" : choiceState === "saved" ? "✓ Буду готовить" : "Буду готовить"}
+        <div><span>Моя готовка</span><strong>{choiceTitle}</strong></div>
+        <button onClick={isPlanned ? markCooked : chooseRecipe} disabled={choiceState === "saving" || choiceState === "cooking" || choiceState === "cooked"}>
+          {choiceState === "saving" ? "Сохраняю…" : choiceState === "cooking" ? "Отмечаю…" : choiceState === "cooked" ? "✓ Приготовлено" : choiceState === "saved" ? "Приготовил" : "Буду готовить"}
         </button>
         {choiceError && <p role="alert">{choiceError}</p>}
       </section>
@@ -198,22 +216,30 @@ function historyDate(value: string): string {
   return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(date);
 }
 
-function HistoryView({ items, loading, error, onOpen, onBack }: { items: ChoiceHistoryItem[]; loading: boolean; error: string; onOpen: (item: ChoiceHistoryItem) => void; onBack: () => void }) {
+function HistoryView({ items, stats, loading, error, onOpen, onBack }: { items: ChoiceHistoryItem[]; stats: UserStats | null; loading: boolean; error: string; onOpen: (item: ChoiceHistoryItem) => void; onBack: () => void }) {
   return (
     <main className="history-page">
       <button className="back-button" onClick={onBack}>← В каталог</button>
       <header className="history-heading">
         <p className="eyebrow">Личная коллекция</p>
         <h1>Мой выбор</h1>
-        <p>Рецепты, которые вы решили приготовить. Количество гостей тоже сохранено.</p>
+        <p>Планы, приготовленные блюда и ваши кулинарные предпочтения.</p>
       </header>
       {error && <div className="error-note" role="alert">{error}</div>}
       {loading && <div className="loader"><span /><span /><span /></div>}
+      {stats && (
+        <section className="stats-panel">
+          <div><strong>{stats.planned}</strong><span>запланировано</span></div>
+          <div><strong>{stats.total_cooked}</strong><span>приготовлено</span></div>
+          <div><strong>{stats.distinct_cooked}</strong><span>разных блюд</span></div>
+          <div className="taste-summary"><span>Чаще выбираете</span><strong>{stats.top_categories[0]?.value ?? "Статистика появится после готовки"}</strong>{stats.top_grills[0] && <small>{stats.top_grills[0].value}</small>}</div>
+        </section>
+      )}
       {!loading && !items.length && <div className="empty-state history-empty"><strong>Здесь пока пусто</strong><p>Откройте рецепт и нажмите «Буду готовить».</p></div>}
       <div className="history-grid">
         {items.map((item) => (
           <article className="history-item" key={item.id}>
-            <div className="history-meta"><span>{historyDate(item.chosen_at)}</span><strong>{item.guests ? `${item.guests} чел.` : "Порции не указаны"}</strong></div>
+            <div className="history-meta"><span>{historyDate(item.status_at)}</span><strong className={item.status}>{item.status === "cooked" ? "Приготовлено" : "В планах"} · {item.guests ? `${item.guests} чел.` : "порции не указаны"}</strong></div>
             <RecipeCard recipe={item.recipe} onOpen={() => onOpen(item)} />
           </article>
         ))}
@@ -230,12 +256,14 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<Recipe | null>(null);
+  const [selectedChoiceStatus, setSelectedChoiceStatus] = useState<ChoiceHistoryItem["status"] | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [guests, setGuests] = useState(4);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<ChoiceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [categoryOptions, setCategoryOptions] = useState(fallbackCategories);
   const [grillOptions, setGrillOptions] = useState(fallbackGrills);
   const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
@@ -282,6 +310,7 @@ export default function App() {
     setError("");
     setDetailLoading(true);
     try {
+      setSelectedChoiceStatus(null);
       setSelected(await getRecipe(id));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (reason) {
@@ -297,6 +326,7 @@ export default function App() {
     setError("");
     setDetailLoading(true);
     try {
+      setSelectedChoiceStatus(null);
       setSelected(await getRandomRecipe({ ...filters, query: deferredQuery }));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (reason) {
@@ -309,7 +339,16 @@ export default function App() {
   async function chooseRecipe() {
     if (!selected) return;
     await saveRecipeChoice(selected.id, guests);
+    setSelectedChoiceStatus("planned");
     setHistory([]);
+  }
+
+  async function markCooked() {
+    if (!selected) return;
+    await markRecipeCooked(selected.id, guests);
+    setSelectedChoiceStatus("cooked");
+    setHistory((current) => current.map((item) => item.recipe.id === selected.id ? { ...item, status: "cooked", status_at: new Date().toISOString(), guests } : item));
+    setStats(await getUserStats());
   }
 
   async function openHistory() {
@@ -317,8 +356,9 @@ export default function App() {
     setHistoryLoading(true);
     setHistoryError("");
     try {
-      const result = await getChoiceHistory();
+      const [result, userStats] = await Promise.all([getChoiceHistory(), getUserStats()]);
       setHistory(result.items);
+      setStats(userStats);
     } catch (reason) {
       setHistoryError(reason instanceof Error ? reason.message : "Не удалось загрузить историю");
     } finally {
@@ -328,15 +368,15 @@ export default function App() {
 
   function openHistoryRecipe(item: ChoiceHistoryItem) {
     if (item.guests) setGuests(item.guests);
+    setSelectedChoiceStatus(item.status);
     setSelected(item.recipe);
-    setShowHistory(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const allRecipeCount = categoryOptions.reduce((sum, option) => sum + option.count, 0) || total;
 
-  if (selected) return <RecipeView recipe={selected} guests={guests} onGuestsChange={setGuests} onChoose={chooseRecipe} onBack={() => setSelected(null)} />;
-  if (showHistory) return <HistoryView items={history} loading={historyLoading} error={historyError} onOpen={openHistoryRecipe} onBack={() => setShowHistory(false)} />;
+  if (selected) return <RecipeView recipe={selected} guests={guests} choiceStatus={selectedChoiceStatus} onGuestsChange={setGuests} onChoose={chooseRecipe} onCooked={markCooked} onBack={() => { setSelected(null); setSelectedChoiceStatus(null); }} />;
+  if (showHistory) return <HistoryView items={history} stats={stats} loading={historyLoading} error={historyError} onOpen={openHistoryRecipe} onBack={() => setShowHistory(false)} />;
 
   return (
     <main>
