@@ -48,3 +48,15 @@ export type RecipeFilters = {
   category: string;
   grill: string;
 };
+
+export type ChoiceHistoryItem = {
+  id: string;
+  chosen_at: string;
+  guests: number | null;
+  recipe: Recipe;
+};
+
+export type ChoiceHistory = {
+  items: ChoiceHistoryItem[];
+  total: number;
+};

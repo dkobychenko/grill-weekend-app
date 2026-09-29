@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useState } from "react";
-import { getRandomRecipe, getRecipe, getRecipes, isDemoMode } from "./api";
-import type { Ingredient, Recipe, RecipeFilters } from "./types";
+import { getChoiceHistory, getRandomRecipe, getRecipe, getRecipes, isDemoMode, saveRecipeChoice } from "./api";
+import type { ChoiceHistoryItem, Ingredient, Recipe, RecipeFilters } from "./types";
 
 const categories = ["", "Говядина", "Свинина", "Птица", "Баранина", "Рыба и морепродукты", "Овощи и гарниры"];
 const grills = ["", "дом", "угольный", "газовый", "мангал", "камадо"];
@@ -89,7 +89,10 @@ function RecipeCard({ recipe, onOpen }: { recipe: Recipe; onOpen: (id: string) =
   );
 }
 
-function RecipeView({ recipe, guests, onGuestsChange, onBack }: { recipe: Recipe; guests: number; onGuestsChange: (value: number) => void; onBack: () => void }) {
+function RecipeView({ recipe, guests, onGuestsChange, onChoose, onBack }: { recipe: Recipe; guests: number; onGuestsChange: (value: number) => void; onChoose: () => Promise<void>; onBack: () => void }) {
+  const [choiceState, setChoiceState] = useState<"idle" | "saving" | "saved">("idle");
+  const [choiceError, setChoiceError] = useState("");
+
   useEffect(() => {
     const telegram = window.Telegram?.WebApp;
     const backButton = telegram?.initData ? telegram.BackButton : undefined;
@@ -108,6 +111,21 @@ function RecipeView({ recipe, guests, onGuestsChange, onBack }: { recipe: Recipe
     : null;
   const baseServings = recipeBaseServings(recipe);
   const factor = baseServings ? guests / baseServings : 1;
+
+  async function chooseRecipe() {
+    if (choiceState !== "idle") return;
+    setChoiceError("");
+    setChoiceState("saving");
+    try {
+      await onChoose();
+      setChoiceState("saved");
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
+    } catch (reason) {
+      setChoiceState("idle");
+      setChoiceError(reason instanceof Error ? reason.message : "Не удалось сохранить выбор");
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("heavy");
+    }
+  }
 
   return (
     <main className="recipe-page">
@@ -131,6 +149,14 @@ function RecipeView({ recipe, guests, onGuestsChange, onBack }: { recipe: Recipe
             ? `Ингредиенты указаны на ${baseServings} человек.`
             : `Ингредиенты пересчитаны с ${baseServings} на ${guests} человек · ×${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(factor)}`
           : "В рецепте не указано исходное количество порций, поэтому количества оставлены без изменения."}</p>
+      </section>
+
+      <section className="choice-panel">
+        <div><span>План на готовку</span><strong>{choiceState === "saved" ? "Рецепт сохранён" : `На ${guests} человек`}</strong></div>
+        <button onClick={chooseRecipe} disabled={choiceState !== "idle"}>
+          {choiceState === "saving" ? "Сохраняю…" : choiceState === "saved" ? "✓ Буду готовить" : "Буду готовить"}
+        </button>
+        {choiceError && <p role="alert">{choiceError}</p>}
       </section>
 
       <section className="detail-section">
@@ -167,6 +193,35 @@ function RecipeView({ recipe, guests, onGuestsChange, onBack }: { recipe: Recipe
   );
 }
 
+function historyDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
+function HistoryView({ items, loading, error, onOpen, onBack }: { items: ChoiceHistoryItem[]; loading: boolean; error: string; onOpen: (item: ChoiceHistoryItem) => void; onBack: () => void }) {
+  return (
+    <main className="history-page">
+      <button className="back-button" onClick={onBack}>← В каталог</button>
+      <header className="history-heading">
+        <p className="eyebrow">Личная коллекция</p>
+        <h1>Мой выбор</h1>
+        <p>Рецепты, которые вы решили приготовить. Количество гостей тоже сохранено.</p>
+      </header>
+      {error && <div className="error-note" role="alert">{error}</div>}
+      {loading && <div className="loader"><span /><span /><span /></div>}
+      {!loading && !items.length && <div className="empty-state history-empty"><strong>Здесь пока пусто</strong><p>Откройте рецепт и нажмите «Буду готовить».</p></div>}
+      <div className="history-grid">
+        {items.map((item) => (
+          <article className="history-item" key={item.id}>
+            <div className="history-meta"><span>{historyDate(item.chosen_at)}</span><strong>{item.guests ? `${item.guests} чел.` : "Порции не указаны"}</strong></div>
+            <RecipeCard recipe={item.recipe} onOpen={() => onOpen(item)} />
+          </article>
+        ))}
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   const [filters, setFilters] = useState<RecipeFilters>({ query: "", category: "", grill: "" });
   const deferredQuery = useDeferredValue(filters.query);
@@ -177,6 +232,10 @@ export default function App() {
   const [selected, setSelected] = useState<Recipe | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [guests, setGuests] = useState(4);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<ChoiceHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name;
 
   useEffect(() => {
@@ -235,7 +294,35 @@ export default function App() {
     }
   }
 
-  if (selected) return <RecipeView recipe={selected} guests={guests} onGuestsChange={setGuests} onBack={() => setSelected(null)} />;
+  async function chooseRecipe() {
+    if (!selected) return;
+    await saveRecipeChoice(selected.id, guests);
+    setHistory([]);
+  }
+
+  async function openHistory() {
+    setShowHistory(true);
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const result = await getChoiceHistory();
+      setHistory(result.items);
+    } catch (reason) {
+      setHistoryError(reason instanceof Error ? reason.message : "Не удалось загрузить историю");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function openHistoryRecipe(item: ChoiceHistoryItem) {
+    if (item.guests) setGuests(item.guests);
+    setSelected(item.recipe);
+    setShowHistory(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (selected) return <RecipeView recipe={selected} guests={guests} onGuestsChange={setGuests} onChoose={chooseRecipe} onBack={() => setSelected(null)} />;
+  if (showHistory) return <HistoryView items={history} loading={historyLoading} error={historyError} onOpen={openHistoryRecipe} onBack={() => setShowHistory(false)} />;
 
   return (
     <main>
@@ -250,7 +337,7 @@ export default function App() {
       )}
       <header className="topbar">
         <div className="brand"><span>ОГ</span><div><strong>Что на огонь?</strong><small>рецепты без суеты</small></div></div>
-        <div className="profile">{firstName?.[0] ?? "Г"}</div>
+        <button className="history-button" onClick={openHistory}><span>Мой выбор</span><strong>{firstName?.[0] ?? "Г"}</strong></button>
       </header>
 
       <section className="hero">

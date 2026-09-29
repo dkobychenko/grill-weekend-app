@@ -1,5 +1,5 @@
 import { demoRecipes } from "./demo";
-import type { Recipe, RecipeFilters, RecipePage } from "./types";
+import type { ChoiceHistory, Recipe, RecipeFilters, RecipePage } from "./types";
 
 const API_URL = (import.meta.env.VITE_MINI_APP_API_URL ?? "").replace(/\/$/, "");
 
@@ -76,4 +76,40 @@ export async function getRandomRecipe(filters: RecipeFilters): Promise<Recipe> {
   const query = filtersQuery(filters);
   const response = await fetch(`${API_URL}/recipes/random?${query}`, { headers: requestHeaders() });
   return await responseJson<Recipe>(response, "Не удалось подобрать случайный рецепт");
+}
+
+export async function saveRecipeChoice(recipeId: string, guests: number): Promise<void> {
+  if (isDemoMode()) {
+    const current = JSON.parse(localStorage.getItem("demo-recipe-choices") ?? "[]") as Array<Record<string, unknown>>;
+    const recipe = demoRecipes.find((item) => item.id === recipeId);
+    if (!recipe) throw new Error("Рецепт не найден");
+    const withoutRecipe = current.filter((item) => item.recipe_id !== recipeId);
+    withoutRecipe.unshift({ id: crypto.randomUUID(), recipe_id: recipeId, guests, chosen_at: new Date().toISOString() });
+    localStorage.setItem("demo-recipe-choices", JSON.stringify(withoutRecipe.slice(0, 50)));
+    return;
+  }
+  const response = await fetch(`${API_URL}/choices`, {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({ recipe_id: recipeId, guests }),
+  });
+  await responseJson(response, "Не удалось сохранить выбор");
+}
+
+export async function getChoiceHistory(): Promise<ChoiceHistory> {
+  if (isDemoMode()) {
+    const current = JSON.parse(localStorage.getItem("demo-recipe-choices") ?? "[]") as Array<Record<string, unknown>>;
+    const items = current.flatMap((choice) => {
+      const recipe = demoRecipes.find((item) => item.id === choice.recipe_id);
+      return recipe ? [{
+        id: String(choice.id),
+        chosen_at: String(choice.chosen_at),
+        guests: Number(choice.guests) || null,
+        recipe,
+      }] : [];
+    });
+    return { items, total: items.length };
+  }
+  const response = await fetch(`${API_URL}/choices?limit=30`, { headers: requestHeaders() });
+  return await responseJson<ChoiceHistory>(response, "Не удалось загрузить историю");
 }
