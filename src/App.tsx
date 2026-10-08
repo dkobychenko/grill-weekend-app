@@ -92,6 +92,11 @@ function RecipeCard({ recipe, onOpen }: { recipe: Recipe; onOpen: (id: string) =
 function RecipeView({ recipe, guests, choiceStatus, onGuestsChange, onChoose, onCooked, onBack }: { recipe: Recipe; guests: number; choiceStatus: ChoiceHistoryItem["status"] | null; onGuestsChange: (value: number) => void; onChoose: () => Promise<void>; onCooked: () => Promise<void>; onBack: () => void }) {
   const [choiceState, setChoiceState] = useState<"idle" | "saving" | "saved" | "cooking" | "cooked">(choiceStatus === "cooked" ? "cooked" : choiceStatus === "planned" ? "saved" : "idle");
   const [choiceError, setChoiceError] = useState("");
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [recipe.id, recipe.image_url]);
 
   useEffect(() => {
     const telegram = window.Telegram?.WebApp;
@@ -148,6 +153,11 @@ function RecipeView({ recipe, guests, choiceStatus, onGuestsChange, onChoose, on
   return (
     <main className="recipe-page">
       <button className="back-button" onClick={onBack}>← К каталогу</button>
+      <div className={`detail-cover${!recipe.image_url || imageFailed ? " fallback" : ""}`}>
+        {recipe.image_url && !imageFailed
+          ? <img src={recipe.image_url} alt={recipe.title} onError={() => setImageFailed(true)} />
+          : <span aria-hidden="true">{categoryMarks[recipe.category] ?? "Е"}</span>}
+      </div>
       <div className="detail-hero">
         <div className="detail-mark">{categoryMarks[recipe.category] ?? "Е"}</div>
         <p className="eyebrow">{recipe.category}</p>

@@ -184,6 +184,12 @@ body::before {
 
 .recipe-page { padding-top: 22px; }
 .back-button { margin-bottom: 30px; padding: 9px 0; border: 0; background: transparent; font-weight: 700; cursor: pointer; }
+.detail-cover { position: relative; width: 100%; max-height: 500px; aspect-ratio: 16 / 7; overflow: hidden; border-radius: 3px 42px 0 0; background: var(--moss); }
+.detail-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.detail-cover.fallback { display: grid; place-items: center; color: rgba(244, 234, 215, 0.68); background: var(--moss); }
+.detail-cover.fallback::after { position: absolute; inset: 0; content: ""; background: repeating-linear-gradient(125deg, transparent 0 28px, rgba(255,255,255,.04) 28px 30px); }
+.detail-cover.fallback span { position: relative; z-index: 1; font-family: Georgia, serif; font-size: clamp(88px, 17vw, 210px); letter-spacing: -0.1em; }
+.detail-cover + .detail-hero { border-radius: 0 0 3px 3px; }
 .detail-hero { position: relative; padding: clamp(28px, 7vw, 74px); overflow: hidden; border-radius: 3px 42px 3px 3px; background: var(--ink); color: var(--paper); }
 .detail-mark { position: absolute; right: -16px; bottom: -60px; color: rgba(244, 234, 215, 0.05); font-family: Georgia, serif; font-size: 260px; letter-spacing: -0.12em; }
 .detail-hero h1 { position: relative; max-width: 880px; font-size: clamp(42px, 7vw, 76px); }
@@ -237,6 +243,7 @@ footer { display: flex; justify-content: space-between; max-width: 1180px; margi
   .recipe-card h3 { min-height: 0; font-size: 22px; }
   .summary { min-height: 0; -webkit-line-clamp: 2; }
   .card-meta { display: grid; }
+  .detail-cover { max-height: none; aspect-ratio: 4 / 3; border-radius: 3px 24px 0 0; }
   .detail-hero { padding: 34px 24px; }
   .detail-facts { gap: 20px; justify-content: space-between; }.detail-facts strong { font-size: 23px; }
   .servings-panel, .servings-panel > div { display: grid; }
